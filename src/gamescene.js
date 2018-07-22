@@ -12,12 +12,12 @@ CubotGame.GameScene = new Phaser.Class({
 
     preload: function () {
         "use strict";
-        this.load.spritesheet('tiles', '/src/img/tiles.png', {frameWidth: 26, frameHeight: 26});
-        this.load.spritesheet('slide_effect', '/src/img/slide_effect.png', {frameWidth: 28, frameHeight: 16});
-        this.load.image('tiles_img', '/src/img/tiles.png');
-        this.load.image('laser_projectile', '/src/img/laser_projectile.png');
-        this.load.tilemapTiledJSON('map1', '/map/map2.json');
-        this.load.tilemapTiledJSON('map2', '/map/map3.json');
+        this.load.spritesheet('tiles', 'src/img/tiles.png', {frameWidth: 26, frameHeight: 26});
+        this.load.spritesheet('slide_effect', 'src/img/slide_effect.png', {frameWidth: 28, frameHeight: 16});
+        this.load.image('tiles_img', 'src/img/tiles.png');
+        this.load.image('laser_projectile', 'src/img/laser_projectile.png');
+        this.load.tilemapTiledJSON('map1', 'map/map2.json');
+        this.load.tilemapTiledJSON('map2', 'map/map3.json');
     },
 
     create: function () {
