@@ -20,32 +20,30 @@ CubotGame.GameScene = new Phaser.Class({
         this.load.tilemapTiledJSON('map2', 'map/map3.json');
     },
 
-    create: function () {
+    create: function (data) {
         "use strict";
         this.cameras.main.setBackgroundColor('#0a0407');
 
-        // the level
-        this.make.tilemap({key: 'map1'});
-        this.map = this.make.tilemap({ key: 'map1' });
-        var tiles = this.map.addTilesetImage('square_game_1', 'tiles_img');
-        this.collisionLayer = this.map.createDynamicLayer('Tile Layer 1', tiles, 0, 0);
-        this.collisionLayer.depth = 0;
-        this.collisionLayer.setOrigin(0);
+        if (data.hasOwnProperty('level')) {
+            this.data.set('level', data.level);
+        }
+        if (!this.data.has('level')) {
+            this.data.set('level', 1);
+        }
 
-        var startingTile = this.collisionLayer.findByIndex(1);
-        this.setCollisionTile(startingTile.x, startingTile.y, null);
-
-        // the player
-        this.cubot = new CubotGame.Cubot(this, startingTile.x, startingTile.y);
-        this.add.existing(this.cubot);
-
-        this.cameras.main.startFollow(this.cubot.realPos, true);
+        // the levels
+        this.levels = [
+            'map1',
+            'map2',
+        ];
+        this.levelLoaded = false;
+        this.loadLevel(this.data.get('level'));
 
         // controls
         this.cursors = this.input.keyboard.createCursorKeys();
         
         this.input.keyboard.on('keydown_R', function (event) {
-            this.scene.restart();
+            this.scene.restart({level: this.data.get('level')});
         }, this);
         
         this.input.keyboard.on('keydown_P', function (event) {
@@ -60,8 +58,40 @@ CubotGame.GameScene = new Phaser.Class({
         */
     },
 
+    goToNextLevel: function () {
+        this.scene.restart({ level: this.data.get('level') + 1 });
+    },
+
+    loadLevel: function (levelNum) {
+        console.log(levelNum);
+        if (levelNum > this.levels.length) {
+            console.log("that level doesn't exist, maybe");
+            return;
+        }
+        // the tilemap
+        this.map = this.make.tilemap({key: this.levels[levelNum - 1]});
+        var tiles = this.map.addTilesetImage('square_game_1', 'tiles_img');
+        this.collisionLayer = this.map.createDynamicLayer('Tile Layer 1', tiles, 0, 0);
+        this.collisionLayer.depth = 0;
+        this.collisionLayer.setOrigin(0);
+
+        var startingTile = this.collisionLayer.findByIndex(1);
+        this.setCollisionTile(startingTile.x, startingTile.y, null);
+
+        // the player
+        this.cubot = new CubotGame.Cubot(this, startingTile.x, startingTile.y);
+        this.add.existing(this.cubot);
+
+        this.cameras.main.startFollow(this.cubot.realPos, true);
+
+        this.levelLoaded = true;
+    },
+
     update: function (time, delta) {
         "use strict";
+        if (!this.levelLoaded) {
+            return;
+        }
         
         if (this.cubot.state === "stationary") {
             if (this.cursors.right.isDown) {

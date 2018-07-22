@@ -147,7 +147,12 @@ CubotGame.Cubot = new Phaser.Class({
                 return;
             }
 
-            var attachmentHere = this.scene.getAttachmentByTileIndex(this.getTileNextTo(0, 0));
+            var tileHere = this.getTileNextTo(0, 0);
+            if (tileHere === 14) {
+                this.scene.goToNextLevel();
+            }
+
+            var attachmentHere = this.scene.getAttachmentByTileIndex(tileHere);
             if (attachmentHere !== false) {
                 // make the new attachment
                 var attach = new CubotGame.Attachment(this.scene, this, attachmentHere, 0);
