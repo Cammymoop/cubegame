@@ -12,8 +12,12 @@ CubotGame.Cubot = new Phaser.Class({
         "use strict";
         this.depth = -20;
 
+        this.collides = true;
+
         this.tilePosition = new Phaser.Geom.Point(tileX, tileY);
         this.setPosition((this.tilePosition.x * CubotGame.TILE_SIZE) + CubotGame.TILE_SIZE/2, (this.tilePosition.y * CubotGame.TILE_SIZE) + CubotGame.TILE_SIZE/2);
+
+        //these are for camera tracking while the cubot is rolling
         this.realPos = new Phaser.Geom.Point(this.x, this.y);
         this.yOffset = 0;
 
@@ -47,12 +51,17 @@ CubotGame.Cubot = new Phaser.Class({
             anims: 'slide_effect_anim',
         };
 
+        // SFX
+        this.removeAttachmentsSfx = this.scene.sound.add('remove');
+        this.laserSfx = this.scene.sound.add('lasor');
+
         // Controls
         // cycle selected attachment
         this.scene.input.keyboard.on('keydown_C', function (e) { this.cycleSelectedAttachment(); }, this);
 
         // trigger selected attachment primary and secondary functions
-        this.scene.input.keyboard.on('keydown_Z', function (e) { if (e.repeat || !this.selectedAttachment) { return; } this.selectedAttachment.primaryFunction(); }, this);
+        //this.scene.input.keyboard.on('keydown_Z', function (e) { if (e.repeat || !this.selectedAttachment) { return; } this.selectedAttachment.primaryFunction(); }, this);
+        this.scene.input.keyboard.on('keydown_Z', function (e) { if (e.repeat || !this.selectedAttachment) { return; } this.selectedAttachment.bufferPrimaryAction(); }, this);
         this.scene.input.keyboard.on('keydown_X', function (e) { if (e.repeat || !this.selectedAttachment) { return; } this.selectedAttachment.secondaryFunction(); }, this);
 
         /*
@@ -62,6 +71,10 @@ CubotGame.Cubot = new Phaser.Class({
         */
 
         this.scene.events.on('update', this.update, this);
+    },
+
+    sideIsSolid: function (side) {
+        return true;
     },
 
     cycleSelectedAttachment: function () {
@@ -88,6 +101,9 @@ CubotGame.Cubot = new Phaser.Class({
         offset.setToPolar(shotAngle, this.width/2 + 5);
         pos.add(offset);
         var projectile = new CubotGame.Projectile(this.scene, pos.x, pos.y, shotAngle, 'laser_projectile', 0);
+        projectile.collide(); // collide right away so it doesn't flash for a single frame when shot inside a tile/entity
+
+        this.laserSfx.play();
     },
 
     spawnSlideParticle (direction, axis, surfaceDirection) {
@@ -140,9 +156,9 @@ CubotGame.Cubot = new Phaser.Class({
     onStateChange: function () {
         "use strict";
         if (this.state === "stationary") {
-            var tileBelow = this.getTileNextTo(0, 1);
+            var tileBelow = this.getCollisionNextTo(0, 1, CubotGame.TOP_SIDE);
             //console.log("below me is: " + tileBelow);
-            if (!this.scene.tileIsGround(tileBelow)) {
+            if (!tileBelow) {
                 this.setState("falling");
                 return;
             }
@@ -222,8 +238,8 @@ CubotGame.Cubot = new Phaser.Class({
             this.y += this.FALL_SPEED * delta;
             this.updateTilePosition();
             if (this.y >= sd.nextCheckY) {
-                var tileUnder = this.getTileNextTo(0, 1);
-                if (this.scene.tileIsGround(tileUnder)) {
+                var tileUnder = this.getCollisionNextTo(0, 1, CubotGame.TOP_SIDE);
+                if (tileUnder) {
                     this.y = sd.nextCheckY;
                     this.setState("stationary");
                 } else {
@@ -234,8 +250,13 @@ CubotGame.Cubot = new Phaser.Class({
         }
         this.realPos.setTo(Math.floor(this.x), Math.floor(this.y + this.yOffset));
 
+        var tileHere = this.getTileNextTo(0, 0);
+        if (tileHere === 7) { // red lines tile
+            this.clearAllAttachments();
+        }
+
         this.indicatorUpdate();
-        this.attachmentsUpdate();
+        this.attachmentsUpdate(time, delta);
     },
 
     indicatorUpdate: function () {
@@ -251,9 +272,9 @@ CubotGame.Cubot = new Phaser.Class({
         }
     },
 
-    attachmentsUpdate: function () {
+    attachmentsUpdate: function (time, delta) {
         for (var i = 0; i < this.attachments.length; i++) {
-            this.attachments[i].update();
+            this.attachments[i].update(time, delta);
         }
     },
 
@@ -264,13 +285,13 @@ CubotGame.Cubot = new Phaser.Class({
         }
 
         // all these tiles have to be non-solid for me to roll
-        if (this.scene.tileIsSolid(this.getTileNextTo(direction, 0))) { // tile next to me
+        if (this.getCollisionNextTo(direction, 0)) { // tile next to me
             return false;
         }
-        if (this.scene.tileIsSolid(this.getTileNextTo(direction, -1))) { // tile above the tile next to me
+        if (this.getCollisionNextTo(direction, -1)) { // tile above the tile next to me
             return false;
         }
-        if (this.scene.tileIsSolid(this.getTileNextTo(0, -1))) { // tile above me
+        if (this.getCollisionNextTo(0, -1)) { // tile above me
             return false;
         }
         return true;
@@ -291,8 +312,22 @@ CubotGame.Cubot = new Phaser.Class({
         var checkY = axis === 'y' ? direction : 0;
         var surfaceX = axis === 'y' ? surfaceDirection : 0; // x and y inverted here, the surface is perpendicular to the slide
         var surfaceY = axis === 'x' ? surfaceDirection : 0;
-        var surfCheck = (axis === 'x' && surfaceDirection === 1) ? t => this.scene.tileIsGround(t) : t => this.scene.tileIsSolid(t); // special case for using a ground tile as "grip" to slide
-        return (!this.scene.tileIsSolid(this.getTileNextTo(checkX, checkY)) && surfCheck(this.getTileNextTo(surfaceX, surfaceY)));
+        var surfaceSide = axis === 'y' ? (surfaceDirection === 1 ? CubotGame.LEFT_SIDE : CubotGame.RIGHT_SIDE) : (surfaceDirection === 1 ? CubotGame.TOP_SIDE : CubotGame.BOTTOM_SIDE);
+        //var surfCheck = (axis === 'x' && surfaceDirection === 1) ? t => this.scene.tileIsGround(t) : t => this.scene.tileIsSolid(t); // special case for using a ground tile as "grip" to slide
+        return (!this.getCollisionNextTo(checkX, checkY) && this.getCollisionNextTo(surfaceX, surfaceY, surfaceSide));
+    },
+
+    clearAllAttachments: function () {
+        if (this.attachments.length < 1) {
+            return;
+        }
+        for (var att of this.attachments) {
+            att.destroy();
+        }
+        this.selectedAttachment = false;
+        this.attachments = [];
+
+        this.removeAttachmentsSfx.play();
     },
 
     updateTilePosition: function () {
@@ -307,6 +342,10 @@ CubotGame.Cubot = new Phaser.Class({
         } else {
             return Math.PI/4 - modAngle;
         }
+    },
+    getCollisionNextTo: function (xDelta, yDelta, side) {
+        "use strict";
+        return this.scene.collisionCheckIncludingEntities(this.tilePosition.x + xDelta, this.tilePosition.y + yDelta, side);
     },
     getTileNextTo: function (xDelta, yDelta) {
         "use strict";

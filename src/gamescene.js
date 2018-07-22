@@ -2,6 +2,11 @@
 
 CubotGame.TILE_SIZE = 26;
 
+CubotGame.BOTTOM_SIDE = 0;
+CubotGame.LEFT_SIDE = 1;
+CubotGame.TOP_SIDE = 2;
+CubotGame.RIGHT_SIDE = 3;
+
 CubotGame.GameScene = new Phaser.Class({
     Extends: Phaser.Scene,
 
@@ -16,13 +21,52 @@ CubotGame.GameScene = new Phaser.Class({
         this.load.spritesheet('slide_effect', 'src/img/slide_effect.png', {frameWidth: 28, frameHeight: 16});
         this.load.image('tiles_img', 'src/img/tiles.png');
         this.load.image('laser_projectile', 'src/img/laser_projectile.png');
-        this.load.tilemapTiledJSON('map1', 'map/map2.json');
-        this.load.tilemapTiledJSON('map2', 'map/map3.json');
+
+        // levels
+        this.preloadLevel('map1', 'map/map2.json');
+        this.preloadLevel('map2', 'map/map3.json');
+        this.preloadLevel('map3', 'map/map4.json');
+        this.preloadLevel('mapLong', 'map/mapLong.json');
+
+        // audio
+        this.load.audio('remove', [
+            'src/audio/remove.ogg',
+            'src/audio/remove.mp3'
+        ]);
+        this.load.audio('lasor', [
+            'src/audio/lasor.ogg',
+            'src/audio/lasor.mp3'
+        ]);
+        this.load.audio('shot-hit', [
+            'src/audio/shot-hit.ogg',
+            'src/audio/shot-hit.mp3'
+        ]);
+        this.load.audio('shot-hit-break', [
+            'src/audio/shot-hit-break.ogg',
+            'src/audio/shot-hit-break.mp3'
+        ]);
+        this.load.audio('shff', [
+            'src/audio/shff.ogg',
+            'src/audio/shff.mp3'
+        ]);
+        this.load.audio('foo', [
+            'src/audio/foo.ogg',
+            'src/audio/foo.mp3'
+        ]);
+    },
+
+    preloadLevel: function (key, file) {
+        if (!this.levels) {
+            this.levels = [];
+        }
+        this.load.tilemapTiledJSON(key, file);
+        this.levels.push(key);
     },
 
     create: function (data) {
         "use strict";
         this.cameras.main.setBackgroundColor('#0a0407');
+        this.cameras.main.zoom = 3;
 
         if (data.hasOwnProperty('level')) {
             this.data.set('level', data.level);
@@ -31,11 +75,12 @@ CubotGame.GameScene = new Phaser.Class({
             this.data.set('level', 1);
         }
 
-        // the levels
-        this.levels = [
-            'map1',
-            'map2',
-        ];
+        if (!this.data.has('muted')) {
+            this.data.set('muted', false);
+        }
+        this.sound.mute = this.data.get('muted');
+
+        // load the level
         this.levelLoaded = false;
         this.loadLevel(this.data.get('level'));
 
@@ -43,11 +88,22 @@ CubotGame.GameScene = new Phaser.Class({
         this.cursors = this.input.keyboard.createCursorKeys();
         
         this.input.keyboard.on('keydown_R', function (event) {
-            this.scene.restart({level: this.data.get('level')});
+            this.scene.restart();
+        }, this);
+        
+        this.input.keyboard.on('keydown_M', function (event) {
+            this.data.set('muted', !this.data.get('muted'));
+            this.sound.mute = this.data.get('muted');
         }, this);
         
         this.input.keyboard.on('keydown_P', function (event) {
-            this.cameras.main.zoom = this.cameras.main.zoom === 1 ? 3 : 1;
+            var curZoom = this.cameras.main.zoom;
+            this.cameras.main.zoom = {3: 5, 5: 2, 2: 3}[curZoom];
+        }, this);
+        
+        // advance level for debugging
+        this.input.keyboard.on('keydown_ZERO', function (event) {
+            this.scene.restart({level: this.data.get('level') + 1});
         }, this);
 
         /*
@@ -75,12 +131,31 @@ CubotGame.GameScene = new Phaser.Class({
         this.collisionLayer.depth = 0;
         this.collisionLayer.setOrigin(0);
 
+        // vertically lock the camera inside the map
+        this.cameras.main.setBounds(-100000, 0, 200000, this.collisionLayer.height);
+
+
+        // Tile entities
+        // spawn entities
+        this.tileEntities = [];
+        var entityTileIndexes = [5];
+        for (var i of entityTileIndexes) {
+            var tile = this.collisionLayer.findByIndex(i);
+            while (tile) {
+                var te = new CubotGame.TileEntity(this, tile.x, tile.y, i, tile.rotation/(Math.PI/2));
+                this.tileEntities.push(te);
+                this.setCollisionTile(tile.x, tile.y, null);
+                tile = this.collisionLayer.findByIndex(i);
+            }
+        }
+
+        // spawn the player
         var startingTile = this.collisionLayer.findByIndex(1);
         this.setCollisionTile(startingTile.x, startingTile.y, null);
 
-        // the player
         this.cubot = new CubotGame.Cubot(this, startingTile.x, startingTile.y);
         this.add.existing(this.cubot);
+        this.tileEntities.push(this.cubot);
 
         this.cameras.main.startFollow(this.cubot.realPos, true);
 
@@ -134,6 +209,27 @@ CubotGame.GameScene = new Phaser.Class({
         return this.collisionLayer.getTileAt(tileX, tileY, true).index;
     },
 
+    collisionCheckIncludingEntities: function (tileX, tileY, side) {
+        "use strict";
+        var collidable = {};
+        var someCollision = false;
+        collidable.entities = this.tileEntities.filter(function (te) {
+            return (te.tilePosition.x === tileX && te.tilePosition.y === tileY && te.collides && te.sideIsSolid(side));
+        });
+        if (collidable.entities.length < 1) {
+            delete collidable.entities;
+        } else {
+            someCollision = true;
+        }
+        collidable.tile = this.getCollisionTileAt(tileX, tileY);
+        if (!this.tileIsSolid(collidable.tile, side)) {
+            delete collidable.tile;
+        } else {
+            someCollision = true;
+        }
+        return someCollision ? collidable : false;
+    },
+
     setCollisionTile: function (tileX, tileY, newTileIndex) {
         "use strict";
         if (newTileIndex === null) {
@@ -149,9 +245,17 @@ CubotGame.GameScene = new Phaser.Class({
     },
 
     // Do you collide with this tile?
-    tileIsSolid: function (tileIndex) {
+    tileIsSolid: function (tileIndex, side) {
         "use strict";
-        return [1, 3, 4, 12].includes(tileIndex);
+        if (!side) {
+            return [1, 3, 4, 12].includes(tileIndex);
+        } else {
+            var solidTiles = [1, 3, 4, 12];
+            if (side === CubotGame.TOP_SIDE) {
+                solidTiles.push(13);
+            }
+            return solidTiles.includes(tileIndex);
+        }
     },
 
     // Can you sit on this tile?

@@ -12,6 +12,7 @@
         <script src="src/cubot.js"></script>
         <script src="src/attachment.js"></script>
         <script src="src/projectile.js"></script>
+        <script src="src/tile-entity.js"></script>
     </head>
     <body style="background-color:#140c1c">
         <div id="gameContainer" style="border:4px solid #6dc2ca; float:left;"></div>
@@ -20,10 +21,10 @@
             window.onload = function() {
                 var config = {
                     type: Phaser.AUTO,
-                    width: 208*2,
-                    height: 144*2,
+                    width: 416*3,
+                    height: 248*3,
                     pixelArt: true,
-                    zoom: 2,
+                    zoom: 1,
                     parent: 'gameContainer',
                     scene: CubotGame.GameScene
                 };

@@ -11,15 +11,23 @@ CubotGame.Projectile = new Phaser.Class({
         this.depth = 5;
 
         this.rotation = angle;
-        this.goingDown = false;
-        if (this.rotation > Math.PI/4 && this.rotation < Math.PI/4 * 3) {
-            this.goingDown = true;
+        this.orientation = CubotGame.RIGHT_SIDE;
+        if (this.rotation >= Math.PI/4 && this.rotation < Math.PI/4 * 3) {
+            this.orientation = CubotGame.BOTTOM_SIDE;
+        } else if (this.rotation >= Math.PI/4 * 3 && this.rotation < Math.PI + Math.PI/4) {
+            this.orientation = CubotGame.LEFT_SIDE;
+        } else if (this.rotation >= Math.PI + Math.PI/4 && this.rotation < Math.PI/4 * 7) {
+            this.orientation = CubotGame.TOP_SIDE;
         }
 
         this.projectileSpeed = 0.3;
         this.lifetime = 1500;
 
         this.collides = true;
+
+        // SFX
+        this.shotHitSfx = this.scene.sound.add('shot-hit');
+        this.shotHitBreakSfx = this.scene.sound.add('shot-hit-break');
 
         this.scene = scene;
         this.scene.events.on('update', this.update, this);
@@ -40,19 +48,22 @@ CubotGame.Projectile = new Phaser.Class({
             return;
         }
 
-        if (this.collides) {
-            var tilePos = this.scene.getTilePosFromWorldPos(this.x, this.y);
-            var tileHere = this.scene.getCollisionTileAt(tilePos.x, tilePos.y);
-            if (this.goingDown) {
-                if (this.scene.tileIsGround(tileHere)) {
-                    this.hitTile(tilePos, tileHere);
-                    return;
-                }
+        this.collide();
+    },
+
+    collide: function () {
+        if (!this.collides) {
+            return;
+        }
+
+        // collide with solid tiles and entities
+        var tilePos = this.scene.getTilePosFromWorldPos(this.x, this.y);
+        var collisionHere = this.scene.collisionCheckIncludingEntities(tilePos.x, tilePos.y, (this.orientation + 2) % 4);
+        if (collisionHere) {
+            if (collisionHere.hasOwnProperty('tile')) {
+                this.hitTile(tilePos, collisionHere.tile);
             } else {
-                if (this.scene.tileIsSolid(tileHere)) {
-                    this.hitTile(tilePos, tileHere);
-                    return;
-                }
+                this.die();
             }
         }
     },
@@ -61,6 +72,9 @@ CubotGame.Projectile = new Phaser.Class({
         "use strict";
         if (this.scene.tileIsDestructable(tileIndex)) {
             this.scene.setCollisionTile(tilePos.x, tilePos.y, null);
+            this.shotHitBreakSfx.play();
+        } else {
+            this.shotHitSfx.play();
         }
         this.die();
     },
