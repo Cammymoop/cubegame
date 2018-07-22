@@ -1,0 +1,7 @@
+{
+    "globals": {
+        "CubotGame": false,
+        "Phaser": false
+    },
+    "esversion": 6
+}
