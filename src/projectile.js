@@ -20,7 +20,10 @@ CubotGame.Projectile = new Phaser.Class({
             this.orientation = CubotGame.TOP_SIDE;
         }
 
-        this.projectileSpeed = 0.3;
+        this.collisionOffset = new Phaser.Math.Vector2(0, 0);
+        this.collisionOffset.setToPolar(this.rotation, 6);
+
+        this.projectileSpeed = 0.25;
         this.lifetime = 1500;
 
         this.collides = true;
@@ -57,13 +60,25 @@ CubotGame.Projectile = new Phaser.Class({
         }
 
         // collide with solid tiles and entities
-        var tilePos = this.scene.getTilePosFromWorldPos(this.x, this.y);
+        var collideX = this.x + this.collisionOffset.x;
+        var collideY = this.y + this.collisionOffset.y;
+        var tilePos = this.scene.getTilePosFromWorldPos(collideX, collideY);
         var collisionHere = this.scene.collisionCheckIncludingEntities(tilePos.x, tilePos.y, (this.orientation + 2) % 4);
         if (collisionHere) {
             if (collisionHere.hasOwnProperty('tile')) {
                 this.hitTile(tilePos, collisionHere.tile);
             } else {
-                this.die();
+                var die = false;
+                for (let entity of collisionHere.entities) {
+                    if (!entity.intersects(collideX, collideY)) {
+                        continue;
+                    }
+                    entity.onProjectileHit();
+                    die = true;
+                }
+                if (die) {
+                    this.die();
+                }
             }
         }
     },

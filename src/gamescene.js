@@ -17,6 +17,9 @@ CubotGame.GameScene = new Phaser.Class({
 
     preload: function () {
         "use strict";
+        if (this.preloadDone) {
+            return;
+        }
         this.load.spritesheet('tiles', 'src/img/tiles.png', {frameWidth: 26, frameHeight: 26});
         this.load.spritesheet('slide_effect', 'src/img/slide_effect.png', {frameWidth: 28, frameHeight: 16});
         this.load.image('tiles_img', 'src/img/tiles.png');
@@ -65,6 +68,8 @@ CubotGame.GameScene = new Phaser.Class({
 
     create: function (data) {
         "use strict";
+        this.preloadDone = true;
+
         this.cameras.main.setBackgroundColor('#0a0407');
         this.cameras.main.zoom = 3;
 
@@ -119,17 +124,28 @@ CubotGame.GameScene = new Phaser.Class({
     },
 
     loadLevel: function (levelNum) {
-        console.log(levelNum);
         if (levelNum > this.levels.length) {
             console.log("that level doesn't exist, maybe");
             return;
         }
+        this.currentLevel = levelNum;
+
         // the tilemap
         this.map = this.make.tilemap({key: this.levels[levelNum - 1]});
         var tiles = this.map.addTilesetImage('square_game_1', 'tiles_img');
         this.collisionLayer = this.map.createDynamicLayer('Tile Layer 1', tiles, 0, 0);
         this.collisionLayer.depth = 0;
         this.collisionLayer.setOrigin(0);
+
+        this.foregroundLayer = false;
+        for (let layer of this.map.layers) {
+            if (layer.name !== "Tile Layer 2") {
+                continue;
+            }
+            this.foregroundLayer = this.map.createDynamicLayer('Tile Layer 2', tiles, 0, 0);
+            this.foregroundLayer.depth = 10;
+            this.foregroundLayer.setOrigin(0);
+        }
 
         // vertically lock the camera inside the map
         this.cameras.main.setBounds(-100000, 0, 200000, this.collisionLayer.height);
@@ -138,7 +154,7 @@ CubotGame.GameScene = new Phaser.Class({
         // Tile entities
         // spawn entities
         this.tileEntities = [];
-        var entityTileIndexes = [5];
+        var entityTileIndexes = [5, 19, 20];
         for (var i of entityTileIndexes) {
             var tile = this.collisionLayer.findByIndex(i);
             while (tile) {
@@ -201,6 +217,25 @@ CubotGame.GameScene = new Phaser.Class({
         this.cubot.update(time, delta);
     },
 
+    buttonShot: function (tileX, tileY) {
+        if (this.currentLevel === 4 && tileX === 20 && tileY === 10) {
+            for (let i = 4; i <= 8; i++) {
+                this.setCollisionTile(25, i, null);
+            }
+            console.log('the button shot');
+        } else {
+            console.log('another button shot? ' + tileX + ' ' + tileY);
+        }
+    },
+
+    getForegroundTileAt: function (tileX, tileY) {
+        "use strict";
+        if (!this.foregroundLayer || tileX < 0 || tileX >= this.map.width || tileY < 0 || tileY >= this.map.height) {
+            return -1;
+        }
+        return this.foregroundLayer.getTileAt(tileX, tileY, true).index;
+    },
+
     getCollisionTileAt: function (tileX, tileY) {
         "use strict";
         if (tileX < 0 || tileX >= this.map.width || tileY < 0 || tileY >= this.map.height) {
@@ -214,7 +249,7 @@ CubotGame.GameScene = new Phaser.Class({
         var collidable = {};
         var someCollision = false;
         collidable.entities = this.tileEntities.filter(function (te) {
-            return (te.tilePosition.x === tileX && te.tilePosition.y === tileY && te.collides && te.sideIsSolid(side));
+            return (te.tilePosition.x === tileX && te.tilePosition.y === tileY && te.isSolid && te.sideIsSolid(side));
         });
         if (collidable.entities.length < 1) {
             delete collidable.entities;
@@ -247,15 +282,14 @@ CubotGame.GameScene = new Phaser.Class({
     // Do you collide with this tile?
     tileIsSolid: function (tileIndex, side) {
         "use strict";
-        if (!side) {
-            return [1, 3, 4, 12].includes(tileIndex);
-        } else {
-            var solidTiles = [1, 3, 4, 12];
-            if (side === CubotGame.TOP_SIDE) {
-                solidTiles.push(13);
-            }
-            return solidTiles.includes(tileIndex);
+        var solidTiles = [1, 3, 4, 12, 15, 16, 17, 18];
+        if (side === CubotGame.TOP_SIDE) {
+            solidTiles.push(13);
+            solidTiles.push(9);
+        } else if (side ===CubotGame.BOTTOM_SIDE) {
+            solidTiles.push(10);
         }
+        return solidTiles.includes(tileIndex);
     },
 
     // Can you sit on this tile?
@@ -264,10 +298,36 @@ CubotGame.GameScene = new Phaser.Class({
         return this.tileIsSolid(tileIndex) || [13].includes(tileIndex); // include all solid tiles
     },
 
+    // Can you use this tile to slide
+    tileHasFriction: function (tileIndex, side) {
+        if (side === CubotGame.TOP_SIDE && tileIndex === 16) {
+            return false;
+        }
+        if (tileIndex === 9) {
+            return false;
+        }
+        return true;
+    },
+
+    // Can you use this collision set to slide
+    collisionHasFriction: function (collision, side) {
+        if (!collision) {
+            return false;
+        }
+        if (collision.entities) {
+            return true;
+        }
+        var fullSlippery = [9, 17];
+        if (fullSlippery.includes(collision.tile) || (side === CubotGame.TOP_SIDE && collision.tile === 16)) {
+            return false;
+        }
+        return true;
+    },
+
     // Can you break this tile?
     tileIsDestructable: function (tileIndex) {
         "use strict";
-        return [12].includes(tileIndex);
+        return [12, 15].includes(tileIndex);
     },
 
     getAttachmentByTileIndex: function (tileIndex) {

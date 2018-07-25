@@ -5,17 +5,42 @@ CubotGame.TileEntity = new Phaser.Class({
     initialize: function (scene, x, y, tileIndex, orientation) {
         "use strict";
         Phaser.GameObjects.Sprite.call(this, scene, 0, 0, 'tiles', tileIndex - 1);
-        this.entityInit(x, y, orientation);
+        this.entityInit(x, y, tileIndex, orientation);
     },
 
-    entityInit: function (tileX, tileY, orientation) {
+    entityInit: function (tileX, tileY, tileIndex, orientation) {
         "use strict";
         this.depth = -10;
 
         this.tilePosition = new Phaser.Geom.Point(tileX, tileY);
         this.setPosition((this.tilePosition.x * CubotGame.TILE_SIZE) + CubotGame.TILE_SIZE/2, (this.tilePosition.y * CubotGame.TILE_SIZE) + CubotGame.TILE_SIZE/2);
 
-        this.collides = true;
+        this.isSolid = true;
+        this.collisionBox = new Phaser.Geom.Rectangle(this.x + this.width/2, this.y + this.height/2, this.width, this.height);
+
+        this.falls = true;
+
+        this.collisionOffset = new Phaser.Geom.Point(0, 0);
+        if (tileIndex === 19 || tileIndex === 20) {
+            var width = (orientation === 0 || orientation === 2) ? 16 : 5;
+            var height = (orientation === 0 || orientation === 2) ? 16 : 5;
+            this.collisionBox.setSize(width, height);
+
+            var offset = (orientation === 0 || orientation === 3) ? -10 : 10;
+            this.collisionOffset.x = (orientation === 0 || orientation === 2) ? 0 : offset;
+            this.collisionOffset.y = (orientation === 1 || orientation === 3) ? 0 : offset;
+
+            this.pushed = tileIndex === 19 ? false : true;
+            this.onProjectileHit = function () {
+                if (!this.pushed) {
+                    this.scene.buttonShot(this.tilePosition.x, this.tilePosition.y);
+                    this.setFrame(19);
+                    this.pushed = true;
+                }
+            };
+
+            this.falls = false;
+        }
 
         this.orientation = orientation;
         this.rotation = Math.PI/2 * orientation;
@@ -33,6 +58,14 @@ CubotGame.TileEntity = new Phaser.Class({
 
     sideIsSolid: function (side) {
         return true;
+    },
+
+    onProjectileHit: function (side) { // stub
+        return;
+    },
+
+    intersects: function (x, y) {
+        return Phaser.Geom.Rectangle.CenterOn(this.collisionBox, this.x + this.collisionOffset.x, this.y + this.collisionOffset.y).contains(x, y);
     },
 
     setState: function (stateName, data) {
@@ -62,10 +95,12 @@ CubotGame.TileEntity = new Phaser.Class({
         }
         var sd = this.stateData;
         if (this.state === "stationary") {
-            var tileBelow = this.getCollisionNextTo(0, 1);
-            if (!tileBelow) {
-                this.setState("falling");
-                return;
+            if (this.falls) {
+                var tileBelow = this.getCollisionNextTo(0, 1);
+                if (!tileBelow) {
+                    this.setState("falling");
+                    return;
+                }
             }
         } else if (this.state === "falling") {
             this.y += this.FALL_SPEED * delta;
