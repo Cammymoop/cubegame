@@ -234,7 +234,8 @@ CubotGame.GameScene = new Phaser.Class({
                 }
             }
         } else if (this.currentLevel === 5 && tileX === 5 && tileY === 6) {
-            this.setCollisionTile(7, 7, null);
+            this.setCollisionTile(22, 2, null);
+            this.setCollisionTile(22, 3, null);
         }
     },
 

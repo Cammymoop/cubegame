@@ -24,7 +24,7 @@ CubotGame.Projectile = new Phaser.Class({
         this.collisionOffset.setToPolar(this.rotation, 6);
 
         this.projectileSpeed = 0.25;
-        this.lifetime = 1500;
+        this.lifetime = 1900;
 
         this.collides = true;
 
