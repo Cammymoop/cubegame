@@ -36,7 +36,9 @@ CubotGame.Cubot = new Phaser.Class({
         // Constants
         this.ROLL_SPEED = 0.07;
         this.SLIDE_SPEED = 0.09;
-        this.FALL_SPEED = 0.09;
+        //this.FALL_SPEED = 0.09;
+        this.FALL_ACCELERATION = 0.002;
+        this.MAX_FALL_SPEED = 3;
         this.HYP = Math.sqrt((13*13) + (13*13));
 
         // Particles
@@ -128,6 +130,9 @@ CubotGame.Cubot = new Phaser.Class({
     setState: function (stateName, data) {
         "use strict";
         this.state = stateName;
+        if (!data) {
+            data = {};
+        }
         switch (stateName) {
             case "rolling":
                 this.stateData = {
@@ -147,8 +152,14 @@ CubotGame.Cubot = new Phaser.Class({
                 break;
             case "falling":
                 this.stateData = {
-                    nextCheckY: this.y + CubotGame.TILE_SIZE,
+                    fallVelocity: data.hasOwnProperty('initialVelocity') ? data.initialVelocity : 0,
+                    nextCheckY: this.scene.collisionLayer.tileToWorldY(this.tilePosition.y + 1) + this.height/2,
+                    upCheckY: this.scene.collisionLayer.tileToWorldY(this.tilePosition.y) + this.height/2,
                 };
+                if (this.stateData.fallVelocity < 0) {
+                    this.stateData.nextCheckY -= CubotGame.TILE_SIZE;
+                    this.stateData.upCheckY -= CubotGame.TILE_SIZE;
+                }
                 break;
             default:
                 this.stateData = {};
@@ -161,13 +172,16 @@ CubotGame.Cubot = new Phaser.Class({
             var tileBelow = this.getCollisionNextTo(0, 1, CubotGame.TOP_SIDE);
             //console.log("below me is: " + tileBelow);
             if (!tileBelow) {
-                this.setState("falling");
+                this.setState("falling", {initialVelocity: 0});
                 return;
             }
 
             var tileHere = this.getTileNextTo(0, 0);
             if (tileHere === 14) {
                 this.scene.goToNextLevel();
+            }
+            if (tileHere === 28) { // floor switch
+                this.scene.floorSwitchPress(this.tilePosition.x, this.tilePosition.y);
             }
 
             var attachmentHere = this.scene.getAttachmentByTileIndex(tileHere);
@@ -206,13 +220,23 @@ CubotGame.Cubot = new Phaser.Class({
         if (this.state === "stationary") {
             var collisionBelow = this.getCollisionNextTo(0, 1, CubotGame.TOP_SIDE);
             if (!collisionBelow) {
-                this.setState("falling");
+                this.setState("falling", {initialVelocity: 0});
             }
             if (this.downKey.isDown) {
                 if (!collisionBelow.entities && !this.scene.tileIsSolid(collisionBelow.tile)) {
-                    this.setState("falling");
+                    this.setState("falling", {initialVelocity: 0});
+                } else if (collisionBelow.entities) {
+                    for (let entity of collisionBelow.entities) {
+                        if (entity.name === "launcher") {
+                            entity.launch(this);
+                            break;
+                        }
+                    }
+                    //this.setState("falling", {initialVelocity: -3}); // launcher
                 }
             }
+        } else if (this.state === "suspended") {
+            // do nothing
         } else if (this.state === "rolling") {
             this.x += sd.direction * (this.ROLL_SPEED * delta);
             if (this.x * sd.direction > sd.targetX * sd.direction) {
@@ -245,7 +269,12 @@ CubotGame.Cubot = new Phaser.Class({
                 this.setState("stationary");
             }
         } else if (this.state === "falling") {
-            this.y += this.FALL_SPEED * delta;
+            //this.y += this.FALL_ACCELERATION * delta;
+            sd.fallVelocity += this.FALL_ACCELERATION * delta;
+            if (sd.fallVelocity > this.MAX_FALL_SPEED) {
+                sd.fallVelocity = this.MAX_FALL_SPEED;
+            }
+            this.y += sd.fallVelocity;
             this.updateTilePosition();
             if (this.y >= sd.nextCheckY) {
                 var tileUnder = this.getCollisionNextTo(0, 1, CubotGame.TOP_SIDE);
@@ -255,6 +284,17 @@ CubotGame.Cubot = new Phaser.Class({
                 } else {
                     // Continue falling
                     sd.nextCheckY += CubotGame.TILE_SIZE;
+                    sd.upCheckY += CubotGame.TILE_SIZE;
+                }
+            } else if (this.y <= sd.upCheckY) {
+                var tileAbove = this.getCollisionNextTo(0, -1, CubotGame.BOTTOM_SIDE);
+                if (tileAbove) {
+                    this.y = sd.upCheckY;
+                    this.setState("stationary");
+                } else {
+                    // Continue falling
+                    sd.nextCheckY -= CubotGame.TILE_SIZE;
+                    sd.upCheckY -= CubotGame.TILE_SIZE;
                 }
             }
         }

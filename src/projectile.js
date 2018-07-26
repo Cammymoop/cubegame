@@ -63,7 +63,7 @@ CubotGame.Projectile = new Phaser.Class({
         var collideX = this.x + this.collisionOffset.x;
         var collideY = this.y + this.collisionOffset.y;
         var tilePos = this.scene.getTilePosFromWorldPos(collideX, collideY);
-        var collisionHere = this.scene.collisionCheckIncludingEntities(tilePos.x, tilePos.y, (this.orientation + 2) % 4);
+        var collisionHere = this.scene.collisionCheckIncludingEntities(tilePos.x, tilePos.y, (this.orientation + 2) % 4, 'projectile');
         if (collisionHere) {
             if (collisionHere.hasOwnProperty('tile')) {
                 this.hitTile(tilePos, collisionHere.tile);

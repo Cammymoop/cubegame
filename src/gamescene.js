@@ -30,6 +30,7 @@ CubotGame.GameScene = new Phaser.Class({
         this.preloadLevel('map2', 'map/map3.json');
         this.preloadLevel('map3', 'map/map4.json');
         this.preloadLevel('mapLong', 'map/mapLong.json');
+        this.preloadLevel('mapspacito', 'map/mapspacito.json');
 
         // audio
         this.load.audio('remove', [
@@ -154,7 +155,7 @@ CubotGame.GameScene = new Phaser.Class({
         // Tile entities
         // spawn entities
         this.tileEntities = [];
-        var entityTileIndexes = [5, 19, 20];
+        var entityTileIndexes = [5, 18, 19, 20];
         for (var i of entityTileIndexes) {
             var tile = this.collisionLayer.findByIndex(i);
             while (tile) {
@@ -218,13 +219,30 @@ CubotGame.GameScene = new Phaser.Class({
     },
 
     buttonShot: function (tileX, tileY) {
-        if (this.currentLevel === 4 && tileX === 20 && tileY === 10) {
-            for (let i = 4; i <= 8; i++) {
-                this.setCollisionTile(25, i, null);
+        if (this.currentLevel === 4) {
+            if (tileX === 20 && tileY === 10) {
+                for (let i = 4; i <= 8; i++) {
+                    this.setCollisionTile(25, i, null);
+                }
+            } else {
+                if (!this.buttonsActivated) {
+                    this.buttonsActivated = 0;
+                }
+                this.buttonsActivated++;
+                if (this.buttonsActivated >= 3) {
+                    this.setCollisionTile(6, 7, null);
+                }
             }
-            console.log('the button shot');
-        } else {
-            console.log('another button shot? ' + tileX + ' ' + tileY);
+        } else if (this.currentLevel === 5 && tileX === 5 && tileY === 6) {
+            this.setCollisionTile(7, 7, null);
+        }
+    },
+
+    floorSwitchPress: function (tileX, tileY) {
+        this.setCollisionTile(tileX, tileY, 29);
+        if (this.currentLevel === 5 && tileX === 12 && tileY === 6) {
+            this.setCollisionTile(7, 7, null);
+            this.setCollisionTile(13, 1, null);
         }
     },
 
@@ -244,12 +262,12 @@ CubotGame.GameScene = new Phaser.Class({
         return this.collisionLayer.getTileAt(tileX, tileY, true).index;
     },
 
-    collisionCheckIncludingEntities: function (tileX, tileY, side) {
+    collisionCheckIncludingEntities: function (tileX, tileY, side, collisionType) {
         "use strict";
         var collidable = {};
         var someCollision = false;
         collidable.entities = this.tileEntities.filter(function (te) {
-            return (te.tilePosition.x === tileX && te.tilePosition.y === tileY && te.isSolid && te.sideIsSolid(side));
+            return (te.tilePosition.x === tileX && te.tilePosition.y === tileY && te.isSolid && te.sideIsSolid(side, collisionType));
         });
         if (collidable.entities.length < 1) {
             delete collidable.entities;

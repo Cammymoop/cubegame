@@ -20,8 +20,10 @@ CubotGame.TileEntity = new Phaser.Class({
 
         this.falls = true;
 
+        this.name = "scaffold";
+
         this.collisionOffset = new Phaser.Geom.Point(0, 0);
-        if (tileIndex === 19 || tileIndex === 20) {
+        if (tileIndex === 19 || tileIndex === 20) { // shootable buttons
             var width = (orientation === 0 || orientation === 2) ? 16 : 5;
             var height = (orientation === 0 || orientation === 2) ? 16 : 5;
             this.collisionBox.setSize(width, height);
@@ -39,7 +41,34 @@ CubotGame.TileEntity = new Phaser.Class({
                 }
             };
 
+            this.name = "shoot-button";
             this.falls = false;
+        } else if (tileIndex === 18) { // launcher
+            this.LAUNCH_VELOCITY = 2.8;
+            this.launch = function (entity) {
+                this.setFrame(30);
+                entity.setState("suspended");
+                entity.y += 2;
+                this.delayedLaunch = this.scene.time.addEvent({ delay: 500, callback: function () {
+                    this.setFrame(17);
+                    entity.y -= 2;
+                    entity.setState("falling", {initialVelocity: -this.LAUNCH_VELOCITY});
+                }, callbackScope: this});
+            };
+
+            this.name = "launcher";
+            this.falls = false;
+        } else { // scaffold
+            this.sideIsSolid = function (side, collisionType) {
+                if (collisionType !== 'projectile') {
+                    return true;
+                }
+                if (this.orientation === 0 || this.orientation === 2){
+                    return side === CubotGame.TOP_SIDE || side === CubotGame.BOTTOM_SIDE;
+                } else {
+                    return side === CubotGame.LEFT_SIDE || side === CubotGame.RIGHT_SIDE;
+                }
+            };
         }
 
         this.orientation = orientation;
